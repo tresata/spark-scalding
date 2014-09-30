@@ -5,7 +5,7 @@ import org.apache.hadoop.conf.Configuration
 import com.twitter.scalding.{ Args, Job, Source, HadoopMode }
 import org.apache.spark.{ SparkConf, SparkContext }
 
-class SparkJob(args: Args) extends Job(args) {
+abstract class SparkJob(args: Args) extends Job(args) {
   def hadoopConf: Configuration = mode match {
     case hm: HadoopMode => hm.jobConf
     case _ => new Configuration()
@@ -17,5 +17,5 @@ class SparkJob(args: Args) extends Job(args) {
 
   implicit lazy val sc: SparkContext = newSc(ConfigFactory.load, name, tmpJars)
 
-  override def run : Boolean = true
+  override def run : Boolean
 }
