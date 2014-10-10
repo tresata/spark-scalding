@@ -19,12 +19,18 @@ import org.apache.spark.{ Partition, SerializableWritable, SparkContext, TaskCon
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.TaskCompletionListener
 
-class RichSource(source: Source) {
+class RichSource(val source: Source) extends AnyVal {
   def spark(implicit sc: SparkContext): FieldsRDD = CascadingRDD(sc, source)
 }
 
+class RichRDD[T](val rdd: RDD[T]) extends AnyVal {
+  def fieldsRDD(fields: Fields)(implicit ct: ClassTag[T], setter: TupleSetter[T]): FieldsRDD = FieldsRDD(fields)(rdd)
+}
+
 object Dsl {
+  // these methods have crazy names to avoid any import clashes
   implicit def sourceToSparkRichSource(source: Source): RichSource = new RichSource(source)
+  implicit def rddToFieldsRichRDD[T](rdd: RDD[T]): RichRDD[T] = new RichRDD(rdd)
 }
 
 object FieldsRDD {
