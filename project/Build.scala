@@ -11,6 +11,7 @@ object ProjectBuild extends Build {
     scalaVersion := "2.10.4",
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.6", "-target", "1.6"),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-target:jvm-1.6"),
+    resolvers += "Concurrent Maven Repo" at "http://conjars.org/repo",
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
     publishArtifact in Test := false
