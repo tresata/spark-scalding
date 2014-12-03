@@ -15,7 +15,7 @@ import org.apache.spark.rdd.RDD
 
 import com.tresata.spark.scalding.FoldFunctions.rddToFoldFunctions
 
-object FieldConversions extends com.twitter.scalding.FieldConversions
+private object FieldConversions extends com.twitter.scalding.FieldConversions
 
 object FieldsApi {
   implicit private class RichCTuple(val ctuple: CTuple) extends AnyVal {

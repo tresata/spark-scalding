@@ -191,7 +191,7 @@ class CascadingRDD(sc: SparkContext, tap: HadoopTap, @transient conf: Configurat
   import CascadingRDD._
 
   private val serializedJob = new SerializableWritable(new JobConf(conf))
-  def job = serializedJob.value
+  private def job = serializedJob.value
   private val createTime = new Date
 
   // for side effects on job and tap
