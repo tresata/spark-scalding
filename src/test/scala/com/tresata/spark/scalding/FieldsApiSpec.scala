@@ -201,7 +201,8 @@ class FieldsApiSpec extends FunSpec {
     }
 
     it("should groupBy") {
-      val tmp = fapi1
+      // reduce operations only
+      val tmp1 = fapi1
         .insert('g, "group1")
         .groupBy('g)(_
           .average('a -> 'avgA)
@@ -210,8 +211,30 @@ class FieldsApiSpec extends FunSpec {
         )
         .map('avgA -> 'avgA)(identity[String])
         .map('size -> 'size)(identity[String])
-      assert(tmp.fields === (('g, 'avgA, 'size, 'setB): Fields))
-      assert(tmp.rdd.collect.toList === List(new CTuple("group1", "2.5", "2", "2,5")))
+      assert(tmp1.fields === (('g, 'avgA, 'size, 'setB): Fields))
+      assert(tmp1.rdd.collect.toList === List(new CTuple("group1", "2.5", "2", "2,5")))
+
+      // fold operations also
+      val tmp2 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_
+          .sortBy('y)
+          .average('x -> 'avgX)
+          .foldLeft('y -> 'z)("")((_: String) + (_: String))
+          .toList[String]('y -> 'z1)
+        )
+      assert(tmp2.fields === (('g, 'avgX, 'z, 'z1): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("group1", 1.0: JDouble, "223", List("2", "2", "3"))))
+
+      // reduce operations only but with sorting so it runs foldLeftByKey anyhow
+      val tmp3 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_
+          .sortBy('y)
+          .toList[String]('y -> 'z)
+        )
+      assert(tmp3.fields === (('g, 'z): Fields))
+      assert(tmp3.rdd.collect.toList === List(new CTuple("group1", List("2", "2", "3"))))
     }
   }
 
