@@ -246,6 +246,10 @@ class FieldsApi(val fields: Fields, val rdd: RDD[CTuple]) extends Serializable {
 object GroupBuilder {
   private val log = LoggerFactory.getLogger(getClass)
 
+  private implicit def ctupleOrdering: Ordering[CTuple] = new Ordering[CTuple] {
+    override def compare(x: CTuple, y: CTuple): Int = x.compareTo(y)
+  }
+
   private sealed trait ReduceOperation {
     def argsFields: Fields
     def resultFields: Fields

@@ -13,6 +13,7 @@ class FieldsApiSpec extends FunSpec {
   val fapi3 = new FieldsApi(('d, 'e), sc.parallelize(List(new CTuple("1", "10"), new CTuple("1", "11"))))
   val fapi4 = new FieldsApi(('x, 'y), sc.parallelize(List(new CTuple("1", "2"), new CTuple("1", "3"), new CTuple("1", "2"))))
   val fapi5 = new FieldsApi(('x, 'y), sc.parallelize(List(new CTuple("2", "3"))))
+  val fapi6 = new FieldsApi(('x, 'y), sc.parallelize(List(new CTuple("Aa", "1"), new CTuple("BB", "1"), new CTuple("Aa", "2"), new CTuple("BB", "2"))))
 
   describe("A FieldsApi") {
     it("should rename") {
@@ -235,6 +236,11 @@ class FieldsApiSpec extends FunSpec {
         )
       assert(tmp3.fields === (('g, 'z): Fields))
       assert(tmp3.rdd.collect.toList === List(new CTuple("group1", List("2", "2", "3"))))
+
+      // fold operations with keys that have same hashCode
+      val tmp4 = fapi6.groupBy('x)(_.sortBy('y).toList[String]('y -> 'z))
+      assert(tmp4.fields === (('x, 'z): Fields))
+      assert(tmp4.rdd.collect.toList === List(new CTuple("Aa", List("1", "2")), new CTuple("BB", List("1", "2"))))
     }
   }
 
