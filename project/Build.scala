@@ -7,7 +7,7 @@ import sbtassembly.Plugin.AssemblyKeys._
 object ProjectBuild extends Build {
   val sharedSettings = Project.defaultSettings ++ graphSettings ++ Seq(
     organization := "com.tresata",
-    version := "0.2-SNAPSHOT",
+    version := "0.2",
     scalaVersion := "2.10.4",
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.6", "-target", "1.6"),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-target:jvm-1.6"),
