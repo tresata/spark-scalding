@@ -23,12 +23,14 @@ object ProjectBuild extends Build {
     settings = sharedSettings ++ Seq(
       name := "spark-scalding",
       libraryDependencies ++= Seq(
-        "com.typesafe" % "config" % "1.2.1" % "compile",
-        "org.slf4j" % "slf4j-api" % "1.6.6" % "compile",
-        "com.twitter" %% "scalding-core" % "0.12.0" % "compile",
-        "org.apache.spark" %% "spark-core" % "1.1.0" % "provided",
-        "org.slf4j" % "slf4j-log4j12" % "1.6.6" % "test",
-        "org.scalatest" %% "scalatest" % "2.2.0" % "test"
+        "org.slf4j" % "slf4j-api" % "1.7.5" % "compile",
+        "com.twitter" %% "scalding-core" % "0.12.0" % "compile"
+          exclude("com.twitter", "chill-hadoop")
+          exclude("com.twitter", "chill-java")
+          exclude("com.twitter", "chill_2.10"),
+        "org.apache.spark" %% "spark-core" % "1.2.0" % "provided",
+        "org.slf4j" % "slf4j-log4j12" % "1.7.5" % "test",
+        "org.scalatest" %% "scalatest" % "2.2.1" % "test"
       )
     )
   )
