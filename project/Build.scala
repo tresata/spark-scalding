@@ -1,8 +1,7 @@
 import sbt._
 import sbt.Keys._
 import net.virtualvoid.sbt.graph.Plugin._
-import sbtassembly.Plugin._
-import sbtassembly.Plugin.AssemblyKeys._
+import sbtassembly.AssemblyPlugin.autoImport._
 
 object ProjectBuild extends Build {
   val sharedSettings = Project.defaultSettings ++ graphSettings ++ Seq(
@@ -25,7 +24,7 @@ object ProjectBuild extends Build {
       libraryDependencies ++= Seq(
         "org.slf4j" % "slf4j-api" % "1.7.5" % "compile",
         "com.twitter" %% "scalding-core" % "0.12.0" % "compile"
-          exclude("com.twitter", "chill-hadoop")
+          exclude("com.esotericsoftware.kryo", "kryo")
           exclude("com.twitter", "chill-java")
           exclude("com.twitter", "chill_2.10"),
         "org.apache.spark" %% "spark-core" % "1.2.0" % "provided",
@@ -38,12 +37,12 @@ object ProjectBuild extends Build {
   lazy val demo = Project(
     id = "demo",
     base = file("demo"),
-    settings = sharedSettings ++ assemblySettings ++ Seq(
+    settings = sharedSettings ++ Seq(
       name := "spark-scalding-demo",
       libraryDependencies ++= Seq(
         "org.apache.spark" %% "spark-core" % "1.1.0" % "provided"
       ),
-      mergeStrategy in assembly <<= (mergeStrategy in assembly) {
+      assemblyMergeStrategy in assembly <<= (assemblyMergeStrategy in assembly) {
         (old) => {
           case s if s.endsWith(".class") => MergeStrategy.last
           case x => old(x)
