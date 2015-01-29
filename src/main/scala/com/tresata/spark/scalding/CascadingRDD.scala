@@ -20,7 +20,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.util.TaskCompletionListener
 
 class RichSource(val source: Source) extends AnyVal {
-  def spark(implicit sc: SparkContext): FieldsRDD = CascadingRDD(sc, source)
+  def spark(implicit sc: SparkContext): FieldsRDD = CascadingRDD(sc, source, sc.hadoopConfiguration)
 }
 
 class RichRDD[T](val rdd: RDD[T]) extends AnyVal {

@@ -31,7 +31,7 @@ class FieldsApi(val fields: Fields, val rdd: RDD[CTuple]) extends Serializable {
 
   def fieldsRDD: FieldsRDD = FieldsRDD(fields)(rdd)
 
-  def write(source: Source): Unit = CascadingRDD.saveToSource(rdd, source, fields)
+  def write(source: Source): Unit = CascadingRDD.saveToSource(rdd, source, fields, rdd.context.hadoopConfiguration)
 
   def thenDo(f: FieldsApi => FieldsApi): FieldsApi = f(this)
 
