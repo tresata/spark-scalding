@@ -1,8 +1,8 @@
 package com.tresata.spark.scalding
 
+import com.twitter.scalding.{Source, HadoopMode, Job, Args, Config}
 import com.typesafe.config.ConfigFactory
 import org.apache.hadoop.conf.Configuration
-import com.twitter.scalding._
 import org.apache.hadoop.io.serializer.{ Serialization => HSerialization }
 import org.apache.spark.{ SparkConf, SparkContext }
 
@@ -49,7 +49,7 @@ abstract class SparkJob(args: Args) extends Job(args) {
    * @param userHadoop
    * @return
    */
-  private[scalding] def setSerialization(userHadoop: Seq[Class[_ <: HSerialization[_]]] = Nil): Config = {
+  protected def setSerialization(userHadoop: Seq[Class[_ <: HSerialization[_]]] = Nil): Config = {
     
     // Hadoop and Cascading should come first
     val first: Seq[Class[_ <: HSerialization[_]]] =
