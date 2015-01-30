@@ -10,7 +10,6 @@ import org.apache.hadoop.conf.{ Configuration, Configurable }
 import org.apache.hadoop.mapred.{ InputFormat, InputSplit, JobConf, Reporter, JobID, TaskAttemptID, TaskID, TaskAttemptContext, JobContext }
 
 import cascading.tuple.{ Tuple => CTuple, TupleEntry, Fields }
-import cascading.tap.Tap
 import cascading.flow.hadoop.HadoopFlowProcess
 
 import com.twitter.scalding.{ Source, Hdfs, Read, Write, TupleConverter, TupleSetter }
@@ -20,7 +19,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.util.TaskCompletionListener
 
 class RichSource(val source: Source) extends AnyVal {
-  def spark(implicit sc: SparkContext): FieldsRDD = CascadingRDD(sc, source)
+  def spark(implicit sc: SparkContext, conf: Configuration = new Configuration()): FieldsRDD = CascadingRDD(sc, source, conf)
 }
 
 class RichRDD[T](val rdd: RDD[T]) extends AnyVal {
