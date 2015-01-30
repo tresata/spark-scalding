@@ -1,5 +1,6 @@
 package com.tresata.spark.scalding
 
+import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
 
 import cascading.tuple.{ Tuple => CTuple, TupleEntry, Fields }
@@ -31,7 +32,7 @@ class FieldsApi(val fields: Fields, val rdd: RDD[CTuple]) extends Serializable {
 
   def fieldsRDD: FieldsRDD = FieldsRDD(fields)(rdd)
 
-  def write(source: Source): Unit = CascadingRDD.saveToSource(rdd, source, fields)
+  def write(source: Source)(implicit conf: Configuration): Unit = CascadingRDD.saveToSource(rdd, source, fields, conf)
 
   def thenDo(f: FieldsApi => FieldsApi): FieldsApi = f(this)
 
