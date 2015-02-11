@@ -8,6 +8,7 @@ object ProjectBuild extends Build {
     organization := "com.tresata",
     version := "0.3.0-SNAPSHOT",
     scalaVersion := "2.10.4",
+    crossScalaVersions := Seq("2.10.4", "2.11.5"),
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.6", "-target", "1.6"),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-target:jvm-1.6"),
     resolvers += "Concurrent Maven Repo" at "http://conjars.org/repo",
@@ -23,10 +24,11 @@ object ProjectBuild extends Build {
       name := "spark-scalding",
       libraryDependencies ++= Seq(
         "org.slf4j" % "slf4j-api" % "1.7.5" % "compile",
-        "com.twitter" %% "scalding-core" % "0.12.0" % "compile"
+        "com.twitter" %% "scalding-core" % "0.13.1" % "compile"
           exclude("com.esotericsoftware.kryo", "kryo")
           exclude("com.twitter", "chill-java")
-          exclude("com.twitter", "chill_2.10"),
+          exclude("com.twitter", "chill_2.10")
+          exclude("com.twitter", "chill_2.11"),
         "org.apache.spark" %% "spark-core" % "1.2.0" % "provided",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5" % "test",
         "org.scalatest" %% "scalatest" % "2.2.1" % "test"
