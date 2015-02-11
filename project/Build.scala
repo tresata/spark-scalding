@@ -40,7 +40,7 @@ object ProjectBuild extends Build {
     settings = sharedSettings ++ Seq(
       name := "spark-scalding-demo",
       libraryDependencies ++= Seq(
-        "org.apache.spark" %% "spark-core" % "1.1.0" % "provided"
+        "org.apache.spark" %% "spark-core" % "1.2.0" % "provided"
       ),
       assemblyMergeStrategy in assembly <<= (assemblyMergeStrategy in assembly) {
         (old) => {
