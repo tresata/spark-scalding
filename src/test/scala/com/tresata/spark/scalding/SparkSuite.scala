@@ -8,6 +8,7 @@ object SparkSuite {
       .setMaster("local")
       .setAppName("test")
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .set("spark.ui.enabled", "false")
     new SparkContext(conf)
   }
 }
