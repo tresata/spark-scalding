@@ -14,6 +14,7 @@ object ProjectBuild extends Build {
     resolvers += "Concurrent Maven Repo" at "http://conjars.org/repo",
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
+    publishArtifact in Test := false,
     publishTo := {
       val nexus = "https://oss.sonatype.org/"
       if (isSnapshot.value)
@@ -22,7 +23,6 @@ object ProjectBuild extends Build {
         Some("releases"  at nexus + "service/local/staging/deploy/maven2")
     },
     credentials += Credentials(Path.userHome / ".m2" / "credentials_sonatype"),
-    publishArtifact in Test := false,
     pomExtra := (
       <url>https://github.com/tresata/spark-scalding</url>
       <licenses>
