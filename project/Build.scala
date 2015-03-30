@@ -6,7 +6,7 @@ import sbtassembly.AssemblyPlugin.autoImport._
 object ProjectBuild extends Build {
   val sharedSettings = Project.defaultSettings ++ graphSettings ++ Seq(
     organization := "com.tresata",
-    version := "0.3.0-SNAPSHOT",
+    version := "0.3.0",
     scalaVersion := "2.10.4",
     crossScalaVersions := Seq("2.10.4", "2.11.5"),
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.6", "-target", "1.6"),
