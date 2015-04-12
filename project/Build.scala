@@ -58,7 +58,7 @@ object ProjectBuild extends Build {
           exclude("com.twitter", "chill-java")
           exclude("com.twitter", "chill_2.10")
           exclude("com.twitter", "chill_2.11"),
-        "org.apache.spark" %% "spark-core" % "1.2.0" % "provided",
+        "org.apache.spark" %% "spark-core" % "1.3.0" % "provided",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5" % "test",
         "org.scalatest" %% "scalatest" % "2.2.1" % "test"
       )
@@ -71,7 +71,7 @@ object ProjectBuild extends Build {
     settings = sharedSettings ++ Seq(
       name := "spark-scalding-demo",
       libraryDependencies ++= Seq(
-        "org.apache.spark" %% "spark-core" % "1.2.0" % "provided"
+        "org.apache.spark" %% "spark-core" % "1.3.0" % "provided"
       ),
       assemblyMergeStrategy in assembly <<= (assemblyMergeStrategy in assembly) {
         (old) => {
