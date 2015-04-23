@@ -14,7 +14,7 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.Partitioner.defaultPartitioner
 import org.apache.spark.rdd.RDD
 
-import com.tresata.spark.scalding.FoldFunctions.rddToFoldFunctions
+import com.tresata.spark.sorted.PairRDDFunctions._
 
 private object FieldConversions extends com.twitter.scalding.FieldConversions
 
@@ -289,6 +289,7 @@ object GroupBuilder {
     def mapC(c: Any): CTuple = setter(mapCombinerLocked.get(c))
 
     // this is folder api
+    // since i combiner also needs to be able to act like a folder
 
     def getA: Any = null
 
@@ -369,13 +370,9 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
 
   def sorting: Option[Fields] = sortFields
 
-  private def valueOrdering: Ordering[CTuple] = {
-    sorting match {
-      case Some(sortFields) =>
-        new Ordering[CTuple] {
-          override def compare(x: CTuple, y: CTuple): Int = x.get(projectFields, sortFields).compareTo(y.get(projectFields, sortFields))
-        }
-      case None => new FoldFunctions.NoOrdering[CTuple]
+  private def valueOrdering: Option[Ordering[CTuple]] = sorting.map{ sortFields =>
+    new Ordering[CTuple] {
+      override def compare(x: CTuple, y: CTuple): Int = x.get(projectFields, sortFields).compareTo(y.get(projectFields, sortFields))
     }
   }
 
@@ -394,7 +391,9 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
         groupFields.append(resultFields),
         rdd
           .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, projectFields)) }
-          .foldLeftByKey(valueOrdering, getA, defaultPartitioner(rdd))(foldV(projectFields))
+          //.foldLeftByKey(valueOrdering, getA, defaultPartitioner(rdd))(foldV(projectFields))
+          .groupSort(valueOrdering)
+          .foldLeftByKey(getA)(foldV(projectFields))
           .map{ case (group, results) => group.append(mapA(results)) }
       )
     } else {
