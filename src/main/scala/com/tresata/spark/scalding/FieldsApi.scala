@@ -7,7 +7,7 @@ import cascading.tuple.{ Tuple => CTuple, TupleEntry, Fields }
 
 import com.twitter.algebird.{ AveragedValue, Semigroup }
 import com.twitter.scalding.Dsl._
-import com.twitter.scalding.{ FoldOperations, Source, TupleConverter, TupleSetter }
+import com.twitter.scalding.{ FoldOperations, StreamOperations, Source, TupleConverter, TupleSetter }
 import com.twitter.scalding.serialization.Externalizer
 
 import org.apache.spark.SparkContext._
@@ -323,11 +323,25 @@ object GroupBuilder {
     def mapA(a: Any): CTuple = setter(a)
   }
 
-  private[scalding] def apply(): GroupBuilder = new GroupBuilder(List.empty, None)
+  private class StreamOperation(fs: (Fields, Fields), @transient mapfn: Iterator[Any] => TraversableOnce[Any], conv: TupleConverter[Any], setter: TupleSetter[Any])
+      extends Serializable {
+
+    val mapfnLocked = Externalizer(mapfn)
+
+    def argsFields: Fields = fs._1
+
+    def resultFields: Fields = fs._2
+
+    def f(fields: Fields): Iterator[CTuple] => Iterator[CTuple] =
+      it => mapfnLocked.get(it.map(ctuple => conv(new TupleEntry(fs._1, ctuple.get(fields, fs._1))))).toIterator.map(setter.apply)
+  }
+
+  private[scalding] def apply(): GroupBuilder = new GroupBuilder(List.empty, None, None)
 }
 
-class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation], sortFields: Option[Fields])
-    extends FoldOperations[GroupBuilder] with Serializable {
+class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation], sortFields: Option[Fields], 
+  streamOperation: Option[GroupBuilder.StreamOperation])
+    extends FoldOperations[GroupBuilder] with StreamOperations[GroupBuilder] with Serializable {
   import GroupBuilder._
 
   private lazy val operations = reverseOperations.reverse
@@ -336,8 +350,12 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
     case combiner: Combiner => combiner
   }
 
-  private lazy val argsFields: Fields = Fields.merge(operations.map(_.argsFields): _*) // order does not matter and dupes are ok
-  private lazy val resultFields: Fields = Fields.join(operations.map(_.resultFields): _*) // order matters and dupes are not ok
+  private lazy val argsFields: Fields = streamOperation.map{ op => op.argsFields }.getOrElse(
+    Fields.merge(operations.map(_.argsFields): _*) // order does not matter and dupes are ok
+  )
+  private lazy val resultFields: Fields = streamOperation.map{ op => op.resultFields }.getOrElse(
+    Fields.join(operations.map(_.resultFields): _*) // order matters and dupes are not ok
+  )
   private lazy val projectFields: Fields = Fields.merge(argsFields, sortFields.getOrElse(Fields.NONE)) // order does not matter and dupes are ok
 
   def combine[V, C, T](fs: (Fields, Fields))(createCombiner: V => C, mergeValue: (C, V) => C, mergeCombiners: (C, C) => C, mapCombiner: C => T)(
@@ -347,7 +365,7 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
     createCombiner.asInstanceOf[Any => Any], mergeValue.asInstanceOf[(Any, Any) => Any],
     mergeCombiners.asInstanceOf[(Any, Any) => Any], mapCombiner.asInstanceOf[Any => Any],
     conv.asInstanceOf[TupleConverter[Any]], setter.asInstanceOf[TupleSetter[Any]]
-  ) :: reverseOperations, sortFields)
+  ) :: reverseOperations, sortFields, streamOperation)
 
   def mapReduceMap[V, C, T](fs: (Fields, Fields))(mapfn: V => C)(redfn: (C, C) => C)(mapfn2: C => T)(implicit startConv: TupleConverter[V],
     middleSetter: TupleSetter[C], middleConv: TupleConverter[C], endSetter: TupleSetter[T]): GroupBuilder =
@@ -358,17 +376,25 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
       fs,
       init.asInstanceOf[Any], fn.asInstanceOf[(Any, Any) => Any],
       conv.asInstanceOf[TupleConverter[Any]], setter.asInstanceOf[TupleSetter[Any]]
-    ) :: reverseOperations, sortFields)
+    ) :: reverseOperations, sortFields, streamOperation)
 
   def sortBy(f: Fields): GroupBuilder = new GroupBuilder(
     reverseOperations,
     sortFields match {
       case None => Some(f)
       case Some(fields) => Some(fields.append(f))
-    }
+    },
+    streamOperation
   )
 
   def sorting: Option[Fields] = sortFields
+
+  def mapStream[T, X](fs: (Fields, Fields))(mapfn: (Iterator[T]) => TraversableOnce[X])(implicit conv: TupleConverter[T], setter: TupleSetter[X]): GroupBuilder =
+    new GroupBuilder(reverseOperations, sortFields, Some(new StreamOperation(
+      fs,
+      mapfn.asInstanceOf[Iterator[Any] => Iterator[Any]],
+      conv.asInstanceOf[TupleConverter[Any]],
+      setter.asInstanceOf[TupleSetter[Any]])))
 
   private def valueOrdering: Option[Ordering[CTuple]] = sorting.map{ sortFields =>
     new Ordering[CTuple] {
@@ -379,35 +405,46 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
   private[scalding] def schedule(groupFields: Fields, fieldsApi: FieldsApi): FieldsApi = {
     val fields = fieldsApi.fields
     val rdd = fieldsApi.rdd
-    val isFold = operations.foldLeft(false){
-      case (true, _) => true
-      case (_, _: Folder) => true
-      case _ => false
-    } || sortFields.isDefined
 
-    if (isFold) {
-      log.info("performing foldLeftByKey operation")
+    streamOperation.map{ operation =>
+      log.info("performing mapStreamByKey operation")
+      require(operations.isEmpty, "mapStreamByKey cannot be combined with other operations")
       new FieldsApi(
-        groupFields.append(resultFields),
+        groupFields.append(operation.resultFields),
         rdd
           .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, projectFields)) }
-          //.foldLeftByKey(valueOrdering, getA, defaultPartitioner(rdd))(foldV(projectFields))
           .groupSort(valueOrdering)
-          .foldLeftByKey(getA)(foldV(projectFields))
-          .map{ case (group, results) => group.append(mapA(results)) }
+          .mapStreamByKey(operation.f(projectFields))
+          .map{ case (group, results) => group.append(results) }
       )
-    } else {
-      log.info("performing combineByKey operation")
-      new FieldsApi(
-        groupFields.append(resultFields),
-        rdd
-          .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, argsFields)) }
-          .combineByKey(createC(argsFields), mergeV(argsFields), mergeC)
-          .map{ case (group, results) => group.append(mapC(results)) }
-      )
+    }.getOrElse{
+      val isFold = operations.foldLeft(false){
+        case (true, _) => true
+        case (_, _: Folder) => true
+        case _ => false
+      } || sortFields.isDefined
+      if (isFold) {
+        log.info("performing foldLeftByKey operation")
+        new FieldsApi(
+          groupFields.append(resultFields),
+          rdd
+            .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, projectFields)) }
+            .groupSort(valueOrdering)
+            .foldLeftByKey(getA)(foldV(projectFields))
+            .map{ case (group, results) => group.append(mapA(results)) }
+        )
+      } else {
+        log.info("performing combineByKey operation")
+        new FieldsApi(
+          groupFields.append(resultFields),
+          rdd
+            .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, argsFields)) }
+            .combineByKey(createC(argsFields), mergeV(argsFields), mergeC)
+            .map{ case (group, results) => group.append(mapC(results)) }
+        )
+      }
     }
   }
-
   // used in combineByKey
 
   private def createC(fields: Fields): CTuple => List[Any] =
