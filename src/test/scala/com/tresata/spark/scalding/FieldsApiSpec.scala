@@ -224,6 +224,15 @@ class FieldsApiSpec extends FunSpec {
         )
       assert(tmp2.fields === (('g, 'z): Fields))
       assert(tmp2.rdd.collect.toList === List(new CTuple("group1", List("2", "2", "3"))))
+
+      // reduce operation with Fields.VALUES and Fields.ARGS
+      val tmp3 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_
+          .toList[CTuple](Fields.VALUES -> Fields.ARGS)
+        )
+      assert(tmp3.fields === (('g, 'x, 'y): Fields))
+      assert(tmp3.rdd.collect.toList === List(new CTuple("group1", List(new CTuple("1", "2"), new CTuple("1", "3"), new CTuple("1", "2")))))
     }
 
     it("should groupBy with fold operations") {
@@ -252,7 +261,14 @@ class FieldsApiSpec extends FunSpec {
           .sortBy('y)
           .mapStream('y -> 'y){ it: Iterator[Int] => it.map(_ + 1).map(_.toString) }
         )
+      assert(tmp1.fields === (('g, 'y): Fields))
       assert(tmp1.rdd.collect.toList === List(new CTuple("group1", "3"), new CTuple("group1", "3"), new CTuple("group1", "4")))
+
+      val tmp2 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_.sortBy('y).take(2))
+      assert(tmp2.fields === (('g, 'x, 'y): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("group1", "1", "2"), new CTuple("group1", "1", "2")))
     }
 
     it("should support unpivot and pivot") {

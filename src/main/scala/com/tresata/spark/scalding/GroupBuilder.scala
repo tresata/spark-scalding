@@ -54,7 +54,7 @@ object GroupBuilder {
     def mapC(c: Any): CTuple = setter(mapCombinerLocked.get(c))
 
     // this is folder api
-    // since i combiner also needs to be able to act like a folder
+    // since a combiner also needs to be able to act like a folder at times
 
     def getA: Any = null
 
@@ -101,13 +101,32 @@ object GroupBuilder {
       it => mapfnLocked.get(it.map(ctuple => conv(new TupleEntry(fs._1, ctuple.get(fields, fs._1))))).toIterator.map(setter.apply)
   }
 
-  private[scalding] def apply(): GroupBuilder = new GroupBuilder(List.empty, None, None)
+  private[scalding] def apply(fields: Fields, groupFields: Fields): GroupBuilder = new GroupBuilder(fields, groupFields, List.empty, None, None)
 }
 
-class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation], sortFields: Option[Fields], 
+class GroupBuilder private (fields: Fields, groupFields: Fields, 
+  reverseOperations: List[GroupBuilder.ReduceOperation], sortFields: Option[Fields],
   streamOperation: Option[GroupBuilder.StreamOperation])
     extends FoldOperations[GroupBuilder] with StreamOperations[GroupBuilder] with Serializable {
   import GroupBuilder._
+
+  private def resolveFields(fs: (Fields, Fields)): (Fields, Fields) = {
+    val resolvedArgs = fs._1 match {
+      case Fields.VALUES => fields.subtract(groupFields)
+      case f => f
+    }
+    val resolvedResult = fs._2 match {
+      case Fields.ARGS => resolvedArgs
+      case f => f
+    }
+    (resolvedArgs, resolvedResult)
+  }
+
+  private def copy(
+    reverseOperations: List[GroupBuilder.ReduceOperation] = this.reverseOperations,
+    sortFields: Option[Fields] = this.sortFields,
+    streamOperation: Option[GroupBuilder.StreamOperation] = this.streamOperation): GroupBuilder = 
+    new GroupBuilder(fields, groupFields, reverseOperations, sortFields, streamOperation)
 
   private lazy val operations = reverseOperations.reverse
 
@@ -125,38 +144,34 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
 
   def combine[V, C, T](fs: (Fields, Fields))(createCombiner: V => C, mergeValue: (C, V) => C, mergeCombiners: (C, C) => C, mapCombiner: C => T)(
     implicit conv: TupleConverter[V], setter: TupleSetter[T]
-  ): GroupBuilder = new GroupBuilder(new Combiner(
-    fs,
+  ): GroupBuilder = copy(reverseOperations = new Combiner(
+    resolveFields(fs),
     createCombiner.asInstanceOf[Any => Any], mergeValue.asInstanceOf[(Any, Any) => Any],
     mergeCombiners.asInstanceOf[(Any, Any) => Any], mapCombiner.asInstanceOf[Any => Any],
     conv.asInstanceOf[TupleConverter[Any]], setter.asInstanceOf[TupleSetter[Any]]
-  ) :: reverseOperations, sortFields, streamOperation)
+  ) :: reverseOperations)
 
   def mapReduceMap[V, C, T](fs: (Fields, Fields))(mapfn: V => C)(redfn: (C, C) => C)(mapfn2: C => T)(implicit startConv: TupleConverter[V],
     middleSetter: TupleSetter[C], middleConv: TupleConverter[C], endSetter: TupleSetter[T]): GroupBuilder =
     combine(fs)(mapfn, (c: C, v: V) => redfn(c, mapfn(v)), redfn, mapfn2)
 
   def foldLeft[X, T](fs: (Fields, Fields))(init: X)(fn: (X, T) => X)(implicit setter: TupleSetter[X], conv: TupleConverter[T]): GroupBuilder = 
-    new GroupBuilder(new Folder(
-      fs,
+    copy(reverseOperations = new Folder(
+      resolveFields(fs),
       init.asInstanceOf[Any], fn.asInstanceOf[(Any, Any) => Any],
       conv.asInstanceOf[TupleConverter[Any]], setter.asInstanceOf[TupleSetter[Any]]
-    ) :: reverseOperations, sortFields, streamOperation)
+    ) :: reverseOperations)
 
-  def sortBy(f: Fields): GroupBuilder = new GroupBuilder(
-    reverseOperations,
-    sortFields match {
+  def sortBy(f: Fields): GroupBuilder = copy(sortFields = sortFields match {
       case None => Some(f)
       case Some(fields) => Some(fields.append(f))
-    },
-    streamOperation
-  )
+    })
 
   def sorting: Option[Fields] = sortFields
 
   def mapStream[T, X](fs: (Fields, Fields))(mapfn: (Iterator[T]) => TraversableOnce[X])(implicit conv: TupleConverter[T], setter: TupleSetter[X]): GroupBuilder =
-    new GroupBuilder(reverseOperations, sortFields, Some(new StreamOperation(
-      fs,
+    copy(streamOperation = Some(new StreamOperation(
+      resolveFields(fs),
       mapfn.asInstanceOf[Iterator[Any] => Iterator[Any]],
       conv.asInstanceOf[TupleConverter[Any]],
       setter.asInstanceOf[TupleSetter[Any]])))
@@ -167,8 +182,7 @@ class GroupBuilder private (reverseOperations: List[GroupBuilder.ReduceOperation
     }
   }
 
-  private[scalding] def schedule(groupFields: Fields, fieldsApi: FieldsApi): FieldsApi = {
-    val fields = fieldsApi.fields
+  private[scalding] def schedule(fieldsApi: FieldsApi): FieldsApi = {
     val rdd = fieldsApi.rdd
 
     streamOperation.map{ operation =>

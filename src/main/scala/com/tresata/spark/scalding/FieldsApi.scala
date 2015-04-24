@@ -192,7 +192,7 @@ class FieldsApi(val fields: Fields, val rdd: RDD[CTuple]) extends Serializable {
   )
 
   def groupBy(groupFields: Fields)(builder: GroupBuilder => GroupBuilder): FieldsApi =
-    builder(GroupBuilder.apply).schedule(groupFields, this)
+    builder(GroupBuilder(fields, groupFields)).schedule(this)
 
   def unpivot(fs: (Fields, Fields)): FieldsApi = {
     assert(fs._2.size == 2, "must specify two results")
