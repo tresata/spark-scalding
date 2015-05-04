@@ -17,6 +17,7 @@ import com.twitter.scalding.{ Source, Hdfs, Read, Write, TupleConverter, TupleSe
 import org.apache.spark.{ Partition, SerializableWritable, SparkContext, TaskContext }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.TaskCompletionListener
+import org.apache.spark.deploy.SparkHadoopUtil
 
 class RichSource(val source: Source) extends AnyVal {
   def spark(implicit sc: SparkContext, conf: Configuration = new Configuration()): FieldsRDD = CascadingRDD(sc, source, conf)
@@ -201,11 +202,13 @@ class CascadingRDD(sc: SparkContext, tap: HadoopTap, @transient conf: Configurat
   }
   def fields = tap.getSourceFields
   
-  override def getPartitions: Array[Partition] =
+  override def getPartitions: Array[Partition] = {
+    SparkHadoopUtil.get.addCredentials(job)
     inputFormat(job)
       .getSplits(job, minPartitions)
       .zipWithIndex
       .map{ case (split, idx) => new CascadingPartition(id, idx, split) }
+  }
 
   override def compute(split: Partition, context: TaskContext): Iterator[CTuple] = {
     val localJob = new JobConf(serializedJob.value) // copy
