@@ -22,7 +22,7 @@ abstract class SparkJob(args: Args) extends Job(args) {
 
   implicit def sourceToSparkRichSource(source: Source): RichSource = new RichSource(source)
 
-  implicit lazy val sc: SparkContext = newSc(ConfigFactory.load, name, tmpJars)
+  @transient implicit lazy val sc: SparkContext = newSc(ConfigFactory.load, name, tmpJars)
 
   override def run : Boolean
 

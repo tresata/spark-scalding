@@ -186,7 +186,7 @@ object CascadingRDD {
   }
 }
 
-class CascadingRDD(sc: SparkContext, tap: HadoopTap, @transient conf: Configuration = new Configuration, minPartitions: Int = 1)
+class CascadingRDD(@transient sc: SparkContext, tap: HadoopTap, @transient conf: Configuration = new Configuration, minPartitions: Int = 1)
     extends RDD[CTuple](sc, Nil) with FieldsRDD {
   import CascadingRDD._
 
