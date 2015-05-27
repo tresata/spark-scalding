@@ -12,6 +12,7 @@ object ProjectBuild extends Build {
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.6", "-target", "1.6"),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-target:jvm-1.6"),
     resolvers += "Concurrent Maven Repo" at "http://conjars.org/repo",
+    resolvers += "Sonatype Public" at "https://oss.sonatype.org/content/groups/public/",
     publishMavenStyle := true,
     pomIncludeRepository := { x => false },
     publishArtifact in Test := false,
@@ -58,6 +59,7 @@ object ProjectBuild extends Build {
           exclude("com.twitter", "chill-java")
           exclude("com.twitter", "chill_2.10")
           exclude("com.twitter", "chill_2.11"),
+        "com.tresata" %% "spark-sorted" % "0.2.0",
         "org.apache.spark" %% "spark-core" % "1.3.0" % "provided",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5" % "test",
         "org.scalatest" %% "scalatest" % "2.2.1" % "test"

@@ -201,7 +201,7 @@ class FieldsApiSpec extends FunSpec {
       assert(tmp.rdd.collect.toList === List(new CTuple("1", "2", "3", "1", "10"), new CTuple("1", "2", "3", "1", "11"), new CTuple("4", "5", "6", null, null)))
     }
 
-    it("should groupBy") {
+    it("should groupBy with reduce operations") {
       // reduce operations only
       val tmp1 = fapi1
         .insert('g, "group1")
@@ -215,8 +215,29 @@ class FieldsApiSpec extends FunSpec {
       assert(tmp1.fields === (('g, 'avgA, 'size, 'setB): Fields))
       assert(tmp1.rdd.collect.toList === List(new CTuple("group1", "2.5", "2", "2,5")))
 
-      // fold operations also
+      // reduce operations only but with sorting so it runs foldLeftByKey anyhow
       val tmp2 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_
+          .sortBy('y)
+          .toList[String]('y -> 'z)
+        )
+      assert(tmp2.fields === (('g, 'z): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("group1", List("2", "2", "3"))))
+
+      // reduce operation with Fields.VALUES and Fields.ARGS
+      val tmp3 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_
+          .toList[CTuple](Fields.VALUES -> Fields.ARGS)
+        )
+      assert(tmp3.fields === (('g, 'x, 'y): Fields))
+      assert(tmp3.rdd.collect.toList === List(new CTuple("group1", List(new CTuple("1", "2"), new CTuple("1", "3"), new CTuple("1", "2")))))
+    }
+
+    it("should groupBy with fold operations") {
+      // fold operations also
+      val tmp1 = fapi4
         .insert('g, "group1")
         .groupBy('g)(_
           .sortBy('y)
@@ -224,74 +245,81 @@ class FieldsApiSpec extends FunSpec {
           .foldLeft('y -> 'z)("")((_: String) + (_: String))
           .toList[String]('y -> 'z1)
         )
-      assert(tmp2.fields === (('g, 'avgX, 'z, 'z1): Fields))
-      assert(tmp2.rdd.collect.toList === List(new CTuple("group1", 1.0: JDouble, "223", List("2", "2", "3"))))
+      assert(tmp1.fields === (('g, 'avgX, 'z, 'z1): Fields))
+      assert(tmp1.rdd.collect.toList === List(new CTuple("group1", 1.0: JDouble, "223", List("2", "2", "3"))))
 
-      // reduce operations only but with sorting so it runs foldLeftByKey anyhow
-      val tmp3 = fapi4
+      // fold operations with keys that have same hashCode
+      val tmp2 = fapi6.groupBy('x)(_.sortBy('y).toList[String]('y -> 'z))
+      assert(tmp2.fields === (('x, 'z): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("Aa", List("1", "2")), new CTuple("BB", List("1", "2"))))
+    }
+
+    it("should groupBy with stream operations") {
+      val tmp1 = fapi4
         .insert('g, "group1")
         .groupBy('g)(_
           .sortBy('y)
-          .toList[String]('y -> 'z)
+          .mapStream('y -> 'y){ it: Iterator[Int] => it.map(_ + 1).map(_.toString) }
         )
-      assert(tmp3.fields === (('g, 'z): Fields))
-      assert(tmp3.rdd.collect.toList === List(new CTuple("group1", List("2", "2", "3"))))
+      assert(tmp1.fields === (('g, 'y): Fields))
+      assert(tmp1.rdd.collect.toList === List(new CTuple("group1", "3"), new CTuple("group1", "3"), new CTuple("group1", "4")))
 
-      // fold operations with keys that have same hashCode
-      val tmp4 = fapi6.groupBy('x)(_.sortBy('y).toList[String]('y -> 'z))
-      assert(tmp4.fields === (('x, 'z): Fields))
-      assert(tmp4.rdd.collect.toList === List(new CTuple("Aa", List("1", "2")), new CTuple("BB", List("1", "2"))))
+      val tmp2 = fapi4
+        .insert('g, "group1")
+        .groupBy('g)(_.sortBy('y).take(2))
+      assert(tmp2.fields === (('g, 'x, 'y): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("group1", "1", "2"), new CTuple("group1", "1", "2")))
     }
-  }
 
-  it("should support unpivot and pivot") {
-    val tmp1 = fapi1.unpivot(('b, 'c) -> ('key, 'value))
-    assert(tmp1.fields === (('a, 'key, 'value): Fields))
-    assert(tmp1.rdd.collect.toList === List(
-      new CTuple("1", "b", "2"), new CTuple("1", "c", "3"),
-      new CTuple("4", "b", "5"), new CTuple("4", "c", "6")
-    ))
-    val tmp2 = tmp1.groupBy('a)(_.pivot(('key, 'value) -> ('b, 'c)))
-    assert(tmp2.fields === (('a, 'b, 'c): Fields))
-    assert(tmp2.rdd.collect.toList === List(new CTuple("1", "2", "3"), new CTuple("4", "5", "6")))
-  }
+    it("should support unpivot and pivot") {
+      val tmp1 = fapi1.unpivot(('b, 'c) -> ('key, 'value))
+      assert(tmp1.fields === (('a, 'key, 'value): Fields))
+      assert(tmp1.rdd.collect.toList === List(
+        new CTuple("1", "b", "2"), new CTuple("1", "c", "3"),
+        new CTuple("4", "b", "5"), new CTuple("4", "c", "6")
+      ))
+      val tmp2 = tmp1.groupBy('a)(_.pivot(('key, 'value) -> ('b, 'c)))
+      assert(tmp2.fields === (('a, 'b, 'c): Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("1", "2", "3"), new CTuple("4", "5", "6")))
+    }
 
-  it("should dedupe") {
-    val tmp1 = fapi4.unique('*)
-    assert(tmp1.fields === (('x, 'y): Fields))
-    assert(tmp1.rdd.collect.toList === List(new CTuple("1", "2"), new CTuple("1", "3")))
+    it("should dedupe") {
+      val tmp1 = fapi4.unique('*)
+      assert(tmp1.fields === (('x, 'y): Fields))
+      assert(tmp1.rdd.collect.toList === List(new CTuple("1", "2"), new CTuple("1", "3")))
 
-    val tmp2 = fapi4.unique('x)
-    assert(tmp2.fields === ('x: Fields))
-    assert(tmp2.rdd.collect.toList === List(new CTuple("1")))
-  }
+      val tmp2 = fapi4.unique('x)
+      assert(tmp2.fields === ('x: Fields))
+      assert(tmp2.rdd.collect.toList === List(new CTuple("1")))
+    }
 
-  it("should merge") {
-    val tmp1 = fapi4 ++ fapi5
-    assert(tmp1.fields === (('x, 'y): Fields))
-    assert(tmp1.rdd.collect.toList === List(new CTuple("1", "2"), new CTuple("1", "3"), new CTuple("1", "2"), new CTuple("2", "3")))
-  }
+    it("should merge") {
+      val tmp1 = fapi4 ++ fapi5
+      assert(tmp1.fields === (('x, 'y): Fields))
+      assert(tmp1.rdd.collect.toList === List(new CTuple("1", "2"), new CTuple("1", "3"), new CTuple("1", "2"), new CTuple("2", "3")))
+    }
 
-  it("should sample") {
-    val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
-    val tmp2 = tmp1.sample(0.1, 1L)
-    val array = tmp2.rdd.collect.map(_.getInteger(0))
-    assert(array.size > 80 && array.size < 120)
-    assert(array.toSet.size === array.size)
-  }
+    it("should sample") {
+      val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
+      val tmp2 = tmp1.sample(0.1, 1L)
+      val array = tmp2.rdd.collect.map(_.getInteger(0))
+      assert(array.size > 80 && array.size < 120)
+      assert(array.toSet.size === array.size)
+    }
 
-  it("should sample with replacement") {
-    val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
-    val tmp2 = tmp1.sampleWithReplacement(0.1, 1L)
-    val array = tmp2.rdd.collect.map(_.getInteger(0))
-    assert(array.size > 80 && array.size < 120)
-    assert(array.toSet.size < array.size)
-  }
+    it("should sample with replacement") {
+      val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
+      val tmp2 = tmp1.sampleWithReplacement(0.1, 1L)
+      val array = tmp2.rdd.collect.map(_.getInteger(0))
+      assert(array.size > 80 && array.size < 120)
+      assert(array.toSet.size < array.size)
+    }
 
-  it("should insert unique ids") {
-    val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
-    val tmp2 = tmp1.insertUniqueId('id)
-    assert(tmp2.fields === (('a, 'id): Fields))
-    assert(tmp2.project('id).rdd.collect.toSet.size === 1000)
+    it("should insert unique ids") {
+      val tmp1 = new FieldsApi(('a), sc.parallelize((1 to 1000).map{ i => new CTuple(i: JInt) }))
+      val tmp2 = tmp1.insertUniqueId('id)
+      assert(tmp2.fields === (('a, 'id): Fields))
+      assert(tmp2.project('id).rdd.collect.toSet.size === 1000)
+    }
   }
 }
