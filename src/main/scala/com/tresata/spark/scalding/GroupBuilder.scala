@@ -7,6 +7,9 @@ import cascading.tuple.{ Tuple => CTuple, TupleEntry, Fields }
 import com.twitter.scalding.{ FoldOperations, StreamOperations, TupleConverter, TupleSetter }
 import com.twitter.scalding.serialization.Externalizer
 
+import org.apache.spark.HashPartitioner
+import org.apache.spark.Partitioner.defaultPartitioner
+
 import com.tresata.spark.sorted.PairRDDFunctions._
 
 object GroupBuilder {
@@ -101,12 +104,12 @@ object GroupBuilder {
       it => mapfnLocked.get(it.map(ctuple => conv(new TupleEntry(fs._1, ctuple.get(fields, fs._1))))).toIterator.map(setter.apply)
   }
 
-  private[scalding] def apply(fields: Fields, groupFields: Fields): GroupBuilder = new GroupBuilder(fields, groupFields, List.empty, None, None)
+  private[scalding] def apply(fields: Fields, groupFields: Fields): GroupBuilder = new GroupBuilder(fields, groupFields, List.empty, None, None, None)
 }
 
 class GroupBuilder private (fields: Fields, groupFields: Fields, 
   reverseOperations: List[GroupBuilder.ReduceOperation], sortFields: Option[Fields],
-  streamOperation: Option[GroupBuilder.StreamOperation])
+  streamOperation: Option[GroupBuilder.StreamOperation], numReducers: Option[Int])
     extends FoldOperations[GroupBuilder] with StreamOperations[GroupBuilder] with Serializable {
   import GroupBuilder._
 
@@ -125,8 +128,9 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
   private def copy(
     reverseOperations: List[GroupBuilder.ReduceOperation] = this.reverseOperations,
     sortFields: Option[Fields] = this.sortFields,
-    streamOperation: Option[GroupBuilder.StreamOperation] = this.streamOperation): GroupBuilder = 
-    new GroupBuilder(fields, groupFields, reverseOperations, sortFields, streamOperation)
+    streamOperation: Option[GroupBuilder.StreamOperation] = this.streamOperation,
+    numReducers: Option[Int] = this.numReducers): GroupBuilder =
+    new GroupBuilder(fields, groupFields, reverseOperations, sortFields, streamOperation, numReducers)
 
   private lazy val operations = reverseOperations.reverse
 
@@ -176,6 +180,10 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
       conv.asInstanceOf[TupleConverter[Any]],
       setter.asInstanceOf[TupleSetter[Any]])))
 
+  def reducers(r: Int): GroupBuilder = copy(
+    numReducers = Some(r)
+  )
+
   private def valueOrdering: Option[Ordering[CTuple]] = sorting.map{ sortFields =>
     new Ordering[CTuple] {
       override def compare(x: CTuple, y: CTuple): Int = x.get(projectFields, sortFields).compareTo(y.get(projectFields, sortFields))
@@ -184,6 +192,7 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
 
   private[scalding] def schedule(fieldsApi: FieldsApi): FieldsApi = {
     val rdd = fieldsApi.rdd
+    val partitioner = numReducers.map(r => new HashPartitioner(r)).getOrElse(defaultPartitioner(rdd))
 
     streamOperation.map{ operation =>
       log.info("performing mapStreamByKey operation")
@@ -192,7 +201,7 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
         groupFields.append(operation.resultFields),
         rdd
           .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, projectFields)) }
-          .groupSort(valueOrdering)
+          .groupSort(partitioner, valueOrdering)
           .mapStreamByKey(operation.f(projectFields))
           .map{ case (group, results) => group.append(results) }
       )
@@ -208,7 +217,7 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
           groupFields.append(resultFields),
           rdd
             .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, projectFields)) }
-            .groupSort(valueOrdering)
+            .groupSort(partitioner, valueOrdering)
             .foldLeftByKey(getA)(foldV(projectFields))
             .map{ case (group, results) => group.append(mapA(results)) }
         )
@@ -218,7 +227,7 @@ class GroupBuilder private (fields: Fields, groupFields: Fields,
           groupFields.append(resultFields),
           rdd
             .map{ ctuple => (ctuple.get(fields, groupFields), ctuple.get(fields, argsFields)) }
-            .combineByKey(createC(argsFields), mergeV(argsFields), mergeC)
+            .combineByKey(createC(argsFields), mergeV(argsFields), mergeC, partitioner)
             .map{ case (group, results) => group.append(mapC(results)) }
         )
       }
