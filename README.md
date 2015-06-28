@@ -24,7 +24,7 @@ $ sbt
 > assembly
 > exit
 $ hadoop fs -put test/data/fruits.bsv
-$ spark-submit --class com.twitter.scalding.Tool demo/target/scala-2.10/spark-scalding-demo-assembly-0.4.0-SNAPSHOT.jar com.tresata.spark.scalding.demo.DemoJob --hdfs --input fruits.bsv --output out
+$ spark-submit --class com.twitter.scalding.Tool demo/target/scala-2.10/spark-scalding-demo-assembly-0.5.0-SNAPSHOT.jar com.tresata.spark.scalding.demo.DemoJob --hdfs --input fruits.bsv --output out
 ```
 Have fun!
 Team @ Tresata
