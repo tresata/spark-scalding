@@ -27,7 +27,7 @@ class FieldsApi(val fields: Fields, val rdd: RDD[CTuple]) extends Serializable {
 
   def write(source: Source)(implicit conf: Configuration = new Configuration()): Unit = CascadingRDD.saveToSource(rdd, source, fields, conf)
 
-  def thenDo(f: FieldsApi => FieldsApi): FieldsApi = f(this)
+  def thenDo[R](f: FieldsApi => R): R = f(this)
 
   def maybeDo[X](x: Option[X])(f: (FieldsApi, X) => FieldsApi): FieldsApi = x.map(f(this, _)).getOrElse(this)
 
