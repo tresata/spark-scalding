@@ -59,7 +59,7 @@ object ProjectBuild extends Build {
           exclude("com.twitter", "chill-java")
           exclude("com.twitter", "chill_2.10")
           exclude("com.twitter", "chill_2.11"),
-        "com.tresata" %% "spark-sorted" % "0.3.0" % "compile",
+        "com.tresata" %% "spark-sorted" % "0.3.1" % "compile",
         "org.apache.spark" %% "spark-core" % "1.4.0" % "provided",
         "org.slf4j" % "slf4j-log4j12" % "1.7.5" % "test",
         "org.scalatest" %% "scalatest" % "2.2.1" % "test"
